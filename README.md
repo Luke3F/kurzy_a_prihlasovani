@@ -1,58 +1,112 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Kurzy a přihlašování účastníků
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Webová aplikace v Laravelu pro správu kurzů a účastníků a pro přihlašování účastníků do kurzů. Přihláška propojuje účastníka s kurzem a má vlastní stav.
 
-## About Laravel
+## Funkce
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Vytváření, úprava a mazání kurzů (název, kód, kapacita, začátek).
+- Vytváření, úprava a mazání účastníků (jméno, e-mail).
+- Přihlášení účastníka do kurzu a správa stavů přihlášky.
+- Zobrazení obsazenosti kurzu (například 3 / 10, volno 7) a seznamu přihlášených.
+- Filtr kurzů podle data začátku a podle volných míst.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Datový model
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- **courses**: name, code (unikátní), capacity, starts_at
+- **participants**: name, email (unikátní)
+- **enrollments**: course_id, participant_id, enrolled_at, status
 
-## Learning Laravel
+Dvojice course_id + participant_id je v tabulce enrollments unikátní.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Pravidla a validace
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- Kód kurzu je jedinečný (ukládá se velkými písmeny).
+- Kapacita je celé číslo větší než 0 a nelze ji snížit pod počet aktivních přihlášek.
+- E-mail účastníka musí být platný a jedinečný (ukládá se malými písmeny).
+- Účastník se nemůže přihlásit do stejného kurzu dvakrát.
+- Počet aktivních přihlášek nesmí překročit kapacitu. Kontrola běží v databázové transakci se zámkem řádku kurzu, takže ani souběžné požadavky kapacitu nepřekročí.
+- Smazání kurzu nebo účastníka smaže i navázané přihlášky.
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+## Stavy přihlášky
 
-## Agentic Development
+- **enrolled**: aktivní přihláška, zabírá místo v kurzu. Lze ji změnit na cancelled nebo completed.
+- **cancelled**: zrušená přihláška, místo je uvolněné. Lze ji obnovit na enrolled, ale jen pokud je v kurzu volné místo.
+- **completed**: dokončený kurz. Je to konečný stav, další změna není možná.
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+Kapacitu zabírají pouze přihlášky ve stavu enrolled. Když se účastník po zrušení přihlásí znovu, původní přihláška se obnoví a nevznikne nový záznam.
+
+## Požadavky
+
+- PHP 8.2 nebo novější
+- Composer
+- SQLite (výchozí) nebo MySQL/MariaDB
+
+## Instalace a spuštění
+
+1. Naklonujte repozitář a vstupte do složky:
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+git clone https://github.com/Luke3F/kurzy_a_prihlasovani.git
+cd kurzy_a_prihlasovani
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+2. Nainstalujte závislosti:
 
-## Contributing
+```bash
+composer install
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+3. Vytvořte konfigurační soubor a klíč aplikace:
 
-## Code of Conduct
+```bash
+cp .env.example .env
+php artisan key:generate
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Na Windows v PowerShellu použijte místo `cp` příkaz `copy .env.example .env`.
 
-## Security Vulnerabilities
+4. Vytvořte prázdný soubor SQLite databáze:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+touch database/database.sqlite
+```
 
-## License
+Na Windows v PowerShellu: `New-Item database/database.sqlite`.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+5. Spusťte migrace a server:
+
+```bash
+php artisan migrate
+php artisan serve
+```
+
+Aplikace poběží na http://127.0.0.1:8000 a hlavní stránka přesměruje na seznam kurzů.
+
+### Jiná databáze (MySQL)
+
+V souboru `.env` upravte řádky DB_CONNECTION, DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME a DB_PASSWORD, vytvořte prázdnou databázi a spusťte `php artisan migrate`.
+
+## Automatická kontrola (testy)
+
+```bash
+php artisan test --filter=CourseEnrollmentTest
+```
+
+Test používá dočasnou databázi, takže vaše data nijak neovlivní. Vytvoří kurz, ověří jeho uložení v databázi a zkontroluje:
+
+- jedinečnost kódu kurzu a neplatnou kapacitu (0 a desetinná čísla),
+- platnost a jedinečnost e-mailu,
+- zákaz dvojího přihlášení,
+- hlídání kapacity a uvolnění místa po zrušení,
+- povolené a zakázané změny stavů.
+
+Všechny testy spustíte příkazem `php artisan test`.
+
+## Struktura projektu
+
+- `app/Models/`: Course, Participant, Enrollment (logika přihlašování a stavů)
+- `app/Http/Controllers/`: CourseController, ParticipantController, EnrollmentController
+- `database/migrations/`: migrace tabulek kurzů, účastníků a přihlášek
+- `resources/views/`: šablony Blade
+- `routes/web.php`: trasy aplikace
+- `tests/Feature/`: CourseEnrollmentTest
