@@ -1,0 +1,10 @@
+<?php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Participant extends Model
+{
+    protected $fillable = ['name', 'email'];
+    public function enrollments() { return $this->hasMany(Enrollment::class); }
+}
